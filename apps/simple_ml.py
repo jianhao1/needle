@@ -39,9 +39,20 @@ def parse_mnist(image_filesname, label_filename):
                 labels of the examples.  Values should be of type np.int8 and
                 for MNIST will contain the values 0-9.
     """
-    ### BEGIN YOUR SOLUTION
-    raise NotImplementedError()
-    ### END YOUR SOLUTION
+    with gzip.open(label_filename, 'rb') as lbpath:
+      magic, num_items = struct.unpack('>II', lbpath.read(8))
+      assert magic == 2049
+      y = np.frombuffer(lbpath.read(num_items), dtype=np.uint8)
+      assert len(y) == num_items
+    
+    with gzip.open(image_filename, 'rb') as imgpath:
+      magic, num_images, rows, cols = struct.unpack('>IIII', imgpath.read(16))
+      assert magic == 2051
+      images = np.frombuffer(imgpath.read(num_images * rows * cols), dtype=np.uint8)
+      assert len(images) == num_images * rows * cols
+      X = images.reshape(num_images, rows * cols).astype(np.float32) / 255.0
+    
+    return X, y
 
 
 def softmax_loss(Z, y_one_hot):
@@ -60,9 +71,8 @@ def softmax_loss(Z, y_one_hot):
     Returns:
         Average softmax loss over the sample. (ndl.Tensor[np.float32])
     """
-    ### BEGIN YOUR SOLUTION
-    raise NotImplementedError()
-    ### END YOUR SOLUTION
+    # np.mean(np.log(np.sum(np.exp(Z), axis=1)) - Z[np.arange(len(y)), y])
+    return ( ndl.log(ndl.exp(Z).sum(axes=(1,))) - (Z * y_one_hot).sum(axes=(1,)) ).sum() / Z.shape[0]
 
 
 def nn_epoch(X, y, W1, W2, lr=0.1, batch=100):
@@ -89,9 +99,22 @@ def nn_epoch(X, y, W1, W2, lr=0.1, batch=100):
             W2: ndl.Tensor[np.float32]
     """
 
-    ### BEGIN YOUR SOLUTION
-    raise NotImplementedError()
-    ### END YOUR SOLUTION
+    m = X.shape[0]
+    k = W2.shape[1]
+    for start in range(0, m, batch):
+      end = min(start + batch, m)
+      size = end - start
+      X_batch = ndl.Tensor(X[start:end])
+      y_batch = np.zeros((size, k))
+      y_batch[np.arange(size), y[start:end]] = 1
+      y_batch = ndl.Tensor(y_batch)
+
+      loss = softmax_loss(ndl.relu(X_batch @ W1) @ W2, y_batch)
+      loss.backward()
+
+      W1 = ndl.Tensor(W1.numpy() - lr * W1.grad.numpy())
+      W2 = ndl.Tensor(W2.numpy() - lr * W2.grad.numpy())
+    return W1, W2
 
 ### CIFAR-10 training ###
 def epoch_general_cifar10(dataloader, model, loss_fn=nn.SoftmaxLoss(), opt=None):
