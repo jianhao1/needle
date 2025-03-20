@@ -10,14 +10,28 @@ np.random.seed(0)
 class ResNet9(ndl.nn.Module):
     def __init__(self, device=None, dtype="float32"):
         super().__init__()
-        ### BEGIN YOUR SOLUTION ###
-        raise NotImplementedError() ###
-        ### END YOUR SOLUTION
+        def ConvBN(a, b, k, s):
+          return nn.Sequential(nn.Conv(a, b, k, s, device=device, dtype=dtype),
+                      nn.BatchNorm2d(b, device=device, dtype=dtype),
+                      nn.ReLU())
+
+        def ResidualBlock(a, b, k, s):
+          main = nn.Sequential(ConvBN(a, b, k, s), ConvBN(a, b, k, s))
+          return nn.Residual(main)
+
+        self.model = nn.Sequential(ConvBN(3, 16, 7, 4),
+                                    ConvBN(16, 32, 3, 2),
+                                    ResidualBlock(32, 32, 3, 1),
+                                    ConvBN(32, 64, 3, 2),
+                                    ConvBN(64, 128, 3, 2),
+                                    ResidualBlock(128, 128, 3, 1),
+                                    nn.Flatten(),
+                                    nn.Linear(128, 128, device=device, dtype=dtype),
+                                    nn.ReLU(),
+                                    nn.Linear(128, 10, device=device, dtype=dtype))
 
     def forward(self, x):
-        ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
-        ### END YOUR SOLUTION
+        return self.model(x)
 
 
 class LanguageModel(nn.Module):
@@ -34,9 +48,18 @@ class LanguageModel(nn.Module):
         num_layers: Number of layers in RNN or LSTM
         """
         super(LanguageModel, self).__init__()
-        ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
-        ### END YOUR SOLUTION
+        self.embedding = nn.Embedding(output_size, embedding_size, device=device, dtype=dtype)
+        if seq_model == 'rnn':
+          self.seq_model = nn.RNN(embedding_size, hidden_size, num_layers, device=device, dtype=dtype)
+        elif seq_model == 'lstm':
+          self.seq_model = nn.LSTM(embedding_size, hidden_size, num_layers, device=device, dtype=dtype)
+        elif seq_model == 'transformer':
+          self.seq_model = nn.Transformer(embedding_size, hidden_size, num_layers, device=device, dtype=dtype)
+          hidden_size = embedding_size # the final linear head self.linear should take in input dimension embedding_size.
+        else:
+          raise TypeError('seq model type error.')
+        self.linear = nn.Linear(hidden_size, output_size, device=device, dtype=dtype)
+        self.hidden_size = hidden_size
 
     def forward(self, x, h=None):
         """
@@ -51,9 +74,11 @@ class LanguageModel(nn.Module):
         h of shape (num_layers, bs, hidden_size) if using RNN,
             else h is tuple of (h0, c0), each of shape (num_layers, bs, hidden_size)
         """
-        ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
-        ### END YOUR SOLUTION
+        seq_len, bs = x.shape
+        out = self.embedding(x)
+        out, h = self.seq_model(out, h)
+        out = self.linear(out.reshape((seq_len*bs, self.hidden_size)))
+        return out, h
 
 
 if __name__ == "__main__":
