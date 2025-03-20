@@ -3,6 +3,8 @@
 import struct
 import gzip
 import numpy as np
+from tqdm import tqdm
+import gc
 
 import sys
 
@@ -12,7 +14,8 @@ import needle as ndl
 import needle.nn as nn
 from apps.models import *
 import time
-device = ndl.cpu()
+# device = ndl.cpu()
+device = ndl.cuda()
 
 def parse_mnist(image_filesname, label_filename):
     """Read an images and labels file in MNIST format.  See this page:
@@ -109,9 +112,28 @@ def epoch_general_cifar10(dataloader, model, loss_fn=nn.SoftmaxLoss(), opt=None)
         avg_loss: average loss over dataset
     """
     np.random.seed(4)
-    ### BEGIN YOUR SOLUTION
-    raise NotImplementedError()
-    ### END YOUR SOLUTION
+    tot_correct = 0
+    tot_loss = 0
+
+    if opt:
+      model.train()
+    else:
+      model.eval()
+    
+    n = len(dataloader.dataset)
+    with tqdm(total=n) as progress_bar:
+      for X, y in dataloader:
+        X, y = ndl.Tensor(X, device=device), ndl.Tensor(y, device=device)
+        logits = model(X)
+        loss = loss_fn(logits, y)
+        tot_loss += loss.numpy()[0] * y.shape[0]
+        tot_correct += np.sum(logits.numpy().argmax(axis=1) == y.numpy())
+        if opt:
+          loss.backward()
+          opt.step()
+        progress_bar.update(y.shape[0])
+    
+    return tot_correct / n, tot_loss / n
 
 
 def train_cifar10(model, dataloader, n_epochs=1, optimizer=ndl.optim.Adam,
@@ -133,9 +155,11 @@ def train_cifar10(model, dataloader, n_epochs=1, optimizer=ndl.optim.Adam,
         avg_loss: average loss over dataset from last epoch of training
     """
     np.random.seed(4)
-    ### BEGIN YOUR SOLUTION
-    raise NotImplementedError()
-    ### END YOUR SOLUTION
+    opt = optimizer(model.parameters(), lr=lr, weight_decay=weight_decay)
+    for i in range(n_epochs):
+      avg_acc, avg_loss = epoch_general_cifar10(dataloader, model, loss_fn(), opt)
+      print(f'epoch {i} | avg_acc: {avg_acc}, avg_loss: {avg_loss}')
+    return avg_acc, avg_loss
 
 
 def evaluate_cifar10(model, dataloader, loss_fn=nn.SoftmaxLoss):
@@ -152,9 +176,7 @@ def evaluate_cifar10(model, dataloader, loss_fn=nn.SoftmaxLoss):
         avg_loss: average loss over dataset
     """
     np.random.seed(4)
-    ### BEGIN YOUR SOLUTION
-    raise NotImplementedError()
-    ### END YOUR SOLUTION
+    return epoch_general_cifar10(dataloader, model, loss_fn())
 
 
 ### PTB training ###
@@ -179,9 +201,40 @@ def epoch_general_ptb(data, model, seq_len=40, loss_fn=nn.SoftmaxLoss(), opt=Non
         avg_loss: average loss over dataset
     """
     np.random.seed(4)
-    ### BEGIN YOUR SOLUTION
-    raise NotImplementedError()
-    ### END YOUR SOLUTION
+    tot_correct = 0
+    tot_loss = 0
+
+    if opt:
+      model.train()
+    else:
+      model.eval()
+    
+    nbatch, batch_size = data.shape
+    hidden = None
+    n = 0
+    for i in tqdm(range(0, nbatch - 1, seq_len)):
+      gc.collect() # 也许是因为tensor放在显存而不是内存，触发不了gc？会爆显存，手动gc就可以了。为什么之前没问题？
+      X, y = ndl.data.get_batch(data, i, seq_len, device=device, dtype=dtype)
+      y_pred, hidden = model(X, hidden)
+
+      # detach
+      if isinstance(hidden, tuple):
+        h, c = hidden
+        hidden = (h.detach(), c.detach())
+      else:
+        hidden = hidden.detach()
+      
+      loss = loss_fn(y_pred, y)
+      if opt:
+        loss.backward()
+        opt.step()
+      
+      tot_loss += loss.numpy()[0] * y.shape[0]
+      tot_correct += np.sum(y_pred.numpy().argmax(axis=1) == y.numpy())
+
+      n += y.shape[0]
+
+    return tot_correct / n, tot_loss / n
 
 
 def train_ptb(model, data, seq_len=40, n_epochs=1, optimizer=ndl.optim.SGD,
@@ -206,9 +259,11 @@ def train_ptb(model, data, seq_len=40, n_epochs=1, optimizer=ndl.optim.SGD,
         avg_loss: average loss over dataset from last epoch of training
     """
     np.random.seed(4)
-    ### BEGIN YOUR SOLUTION
-    raise NotImplementedError()
-    ### END YOUR SOLUTION
+    opt = optimizer(model.parameters(), lr=lr, weight_decay=weight_decay)
+    for i in range(n_epochs):
+      avg_acc, avg_loss = epoch_general_ptb(data, model, seq_len, loss_fn(), opt, clip, device, dtype)
+      print(f'epoch {i} | avg_acc: {avg_acc}, avg_loss: {avg_loss}')
+    return avg_acc, avg_loss    
 
 def evaluate_ptb(model, data, seq_len=40, loss_fn=nn.SoftmaxLoss,
         device=None, dtype="float32"):
@@ -226,9 +281,7 @@ def evaluate_ptb(model, data, seq_len=40, loss_fn=nn.SoftmaxLoss,
         avg_loss: average loss over dataset
     """
     np.random.seed(4)
-    ### BEGIN YOUR SOLUTION
-    raise NotImplementedError()
-    ### END YOUR SOLUTION
+    return epoch_general_ptb(data, model, seq_len, loss_fn(), None, None, device, dtype)
 
 ### CODE BELOW IS FOR ILLUSTRATION, YOU DO NOT NEED TO EDIT
 
