@@ -21,23 +21,32 @@ class CIFAR10Dataset(Dataset):
         X - numpy array of images
         y - numpy array of labels
         """
-        ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
-        ### END YOUR SOLUTION
+        super().__init__(transforms)
+        if train:
+          files = [f'data_batch_{i}' for i in range(1, 6)]
+        else:
+          files = ['test_batch']
+        X = []
+        Y = []
+        for f in files:
+          with open(os.path.join(base_folder, f), 'rb') as fo:
+            data_dict = pickle.load(fo, encoding='bytes')
+            X.append(data_dict[b'data'])
+            Y.append(data_dict[b'labels'])
+        self.X = np.concatenate(X).reshape((-1, 3, 32, 32)) / 255.0
+        self.Y = np.concatenate(Y)
 
     def __getitem__(self, index) -> object:
         """
         Returns the image, label at given index
         Image should be of shape (3, 32, 32)
         """
-        ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
-        ### END YOUR SOLUTION
+        image = self.apply_transforms(self.X[index])
+        label = self.Y[index]
+        return image, label
 
     def __len__(self) -> int:
         """
         Returns the total number of examples in the dataset
         """
-        ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
-        ### END YOUR SOLUTION
+        return self.X.shape[0]

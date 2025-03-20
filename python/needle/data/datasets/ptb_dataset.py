@@ -24,17 +24,18 @@ class Dictionary(object):
         and appends to the list of words.
         Returns the word's unique ID.
         """
-        ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
-        ### END YOUR SOLUTION
+        if word in self.word2idx:
+          return self.word2idx[word]
+        idx = len(self.word2idx)
+        self.word2idx[word] = idx
+        self.idx2word.append(word)
+        return idx
 
     def __len__(self):
         """
         Returns the number of unique words in the dictionary.
         """
-        ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
-        ### END YOUR SOLUTION
+        return len(self.word2idx)
 
 
 
@@ -59,9 +60,17 @@ class Corpus(object):
         Output:
         ids: List of ids
         """
-        ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
-        ### END YOUR SOLUTION
+        ids = []
+        with open(path) as f:
+          count = 0
+          for line in f:
+            count += 1
+            if max_lines and count > max_lines:
+              break
+            words = line.split()
+            words.append('<eos>')
+            ids += [self.dictionary.add_word(w) for w in words]
+        return ids
 
 
 def batchify(data, batch_size, device, dtype):
@@ -80,9 +89,8 @@ def batchify(data, batch_size, device, dtype):
     If the data cannot be evenly divided by the batch size, trim off the remainder.
     Returns the data as a numpy array of shape (nbatch, batch_size).
     """
-    ### BEGIN YOUR SOLUTION
-    raise NotImplementedError()
-    ### END YOUR SOLUTION
+    nbatch = len(data) // batch_size
+    return np.array(data[:nbatch * batch_size]).reshape((nbatch, batch_size))
 
 
 def get_batch(batches, i, bptt, device=None, dtype=None):
@@ -104,6 +112,12 @@ def get_batch(batches, i, bptt, device=None, dtype=None):
     data - Tensor of shape (bptt, bs) with cached data as NDArray
     target - Tensor of shape (bptt*bs,) with cached data as NDArray
     """
-    ### BEGIN YOUR SOLUTION
-    raise NotImplementedError()
-    ### END YOUR SOLUTION
+    seq_len = batches.shape[0]
+    assert i < seq_len - 1
+    if i + bptt + 1 > seq_len:
+      X = batches[i:-1]
+      y = batches[i+1:].flatten()
+    else:
+      X = batches[i:i+bptt]
+      y = batches[i+1:i+bptt+1].flatten()
+    return Tensor(X, device=device, dtype=dtype), Tensor(y, device=device, dtype=dtype)
